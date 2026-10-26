@@ -40,13 +40,14 @@ which is exactly what paid services sell. A free "smart route" (using Cloudflare
 
 ## Download
 
-Get the latest `PingPilot-x.y.z-windows.zip` from [Releases](../../releases), extract it and run `PingPilot.exe`.
+Get the latest release from [Releases](../../releases): download **`PingPilot-x.y.z-windows.exe`** and run it
+(or the `.zip`, which has the same `.exe` plus README, LICENSE and CREDITS).
 
 - Windows 10 or 11, 64-bit, with [Microsoft Edge WebView2](https://go.microsoft.com/fwlink/p/?LinkId=2124703)
   (already included in Windows 11).
 - It asks for administrator rights — Windows tweaks, DNS changes and process priority need them.
 - The executable is not code-signed, so SmartScreen will warn you ("More info" → "Run anyway").
-  Each release lists the SHA-256 of the zip so you can check it.
+  Each release ships a `SHA256SUMS.txt` so you can check your download.
 - Nothing changes until you turn it on, and *Settings → Undo all* restores every original value.
 
 ## Run from source
@@ -70,8 +71,8 @@ powershell -ExecutionPolicy Bypass -File build\compilar.ps1
 ```
 
 The script runs the **security battery** first and refuses to build if anything fails, opens the app once to
-check that the UI and the Python bridge work, builds a single `PingPilot.exe` with PyInstaller, zips it and
-writes its SHA-256 to `compilado/`.
+check that the UI and the Python bridge work, builds a single `PingPilot.exe` with PyInstaller, and writes the
+release assets to `compilado/`: the standalone `.exe`, the `.zip` and `SHA256SUMS.txt`.
 
 ## Security
 

@@ -40,8 +40,12 @@ Copy-Item (Join-Path $root 'LICENSE') (Join-Path $out 'windows\LICENSE.txt') -Fo
 Copy-Item (Join-Path $root 'CREDITS.md') (Join-Path $out 'windows\CREDITS.md') -Force
 $zip = Join-Path $out "PingPilot-$version-windows.zip"
 Compress-Archive -Path (Join-Path $out 'windows\*') -DestinationPath $zip -Force
-$hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
-"$hash  PingPilot-$version-windows.zip" | Set-Content -Encoding ascii (Join-Path $out "PingPilot-$version-windows.zip.sha256")
+# .exe avulso para a Release (o mesmo arquivo que está dentro do zip), para quem só quer baixar e rodar
+$exe = Join-Path $out "PingPilot-$version-windows.exe"
+Copy-Item (Join-Path $out 'windows\PingPilot.exe') $exe -Force
+$sums = foreach ($f in @($exe, $zip)) { "{0}  {1}" -f (Get-FileHash $f -Algorithm SHA256).Hash.ToLower(), (Split-Path $f -Leaf) }
+$sums | Set-Content -Encoding ascii (Join-Path $out 'SHA256SUMS.txt')
+$hash = ($sums -join "`n")
 
 Write-Host '== Conferindo o pacote'
 python (Join-Path $root 'security\check.py') --only package
