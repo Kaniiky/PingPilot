@@ -1,0 +1,66 @@
+# Revisado manualmente. Gerado por security/check.py --update
+(hue + 40) % 360
+COLORS[i]
+ICONS[name] || ICONS.help
+a === selectedApp ? "sel" : ""
+a.added ? `<span class="tag green">já adicionado</span>` : ""
+a.company ? " · " + esc(a.company) : ""
+a.id
+a.kind
+a.read ? "" : "unread"
+apps.indexOf(a)
+best ? `<span class="fast">${svg("bolt")}Mais rápido</span>` : ""
+c.main ? "main-conn" : ""
+c.main ? ` <span class="tag green">principal</span>` : ""
+changed && r.url ? `<button class="btn outline small up-url" data-url="${esc(r.url)}">Ver mudanças no GitHub</button>` : ""
+changed ? "Mudou" : r.status === "ok" ? "Em dia" : esc(r.status)
+changed ? "amber" : r.status === "ok" ? "green" : ""
+changed ? `<button class="btn outline small up-ok" data-name="${esc(r.name)}">Marcar como revisado</button>` : ""
+cls
+d.Vendor ? `<button class="btn outline small vendor" data-url="${esc(d.Vendor.url)}">Site da ${esc(d.Vendor.name)}</button>` : ""
+d.host ? `<small>${esc(d.host)}</small>` : ""
+d.name && d.label ? `<span class="muted small">${esc(d.name)}</span>` : ""
+d.ping == null ? `<span class="muted">não responde a ping</span>` : `${d.ping} ms`
+details.map((d) => `<small>${d}</small>`).join("")
+h.avg == null ? "—" : h.avg + " ms"
+h.avg ? Math.max(3, (h.avg / worst) * 100) : 0
+h.hop
+hue
+k
+l
+l.t
+live ? ` <span class="tag green">ao vivo</span>` : ` <span class="tag">${esc(last.ended || "")}</span>`
+lvl
+p ? gameIcon(p, "session-icon") : ""
+p.enabled ? "checked" : ""
+p.exes.length > 1 ? `<button class="icon-btn rm-exe" data-exe="${esc(e)}" title="Tirar do grupo">${svg("x")}</button>` : ""
+p.icon
+p.id
+p.running ? "on" : ""
+p.running ? "● Em execução" : "Automático"
+r.auto ? 'data-auto="1"' : ""
+r.current ? "disabled" : ""
+r.current ? `<span class="tag green">Em uso</span>` : ""
+r.custom ? `<button class="icon-btn rm-dns" data-p1="${esc(r.primary)}" title="Remover">${svg("x")}</button>` : ""
+r.id
+r.ms == null ? "Não medido" : Math.round(r.ms) + " ms"
+r.name === "Seu roteador" ? "" : `<button class="icon-btn rm" data-host="${esc(r.host)}" title="Remover"><i data-icon="x"></i></button>`
+r.ping == null ? `<span class="muted">—</span>` : `<span class="proto"><i data-icon="pulse"></i><b>${r.ping} ms</b></span>`
+r.proto
+r.quality || ""
+r.sent != null && r.sent < r.total && r.quality !== undefined ? `${r.sent}/${r.total}` : QUALITY[r.quality] || "—"
+r.sent ? pct(r.loss) : "—"
+r.server ? `<div class="srv"><i data-icon="server"></i><span>${esc(r.host || "Servidor")}<br><b>${esc(r.server)}</b></span></div>` : `<span class="muted">sem servidor TCP</span>`
+r.tcp
+r.udp
+rank
+t.id
+t.locked ? "Precisa de administrador" : !t.available ? "Indisponível nesta conexão" : ""
+t.locked ? `<span class="tag amber">Admin</span>` : ""
+t.locked || !t.available ? "disabled" : ""
+t.on ? "checked" : ""
+t.reboot ? `<span class="tag amber">Reiniciar</span>` : ""
+t.recommended ? `<span class="tag green">Recomendado</span>` : ""
+tags
+ups.length
+v

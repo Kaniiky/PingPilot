@@ -1,0 +1,6 @@
+# Revisado manualmente. Gerado por security/check.py --update
+app.py: TASK_NAME
+app.py: servers
+core.py: ids
+core.py: priority
+drivers.py: criteria

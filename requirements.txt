@@ -1,0 +1,4 @@
+# PingPilot — dependências para rodar (python pingpilot/app.py)
+pywebview==6.2.1
+pystray==0.19.5
+pillow==13.0.0

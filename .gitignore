@@ -1,0 +1,31 @@
+# --- dados locais do app (configuração, backups, logs, cache do WebView2) ---
+pingpilot/config.json
+pingpilot/config.*.bak
+pingpilot/backup.json
+pingpilot/logs/
+pingpilot/.webview/
+pingpilot/.webview-teste/
+__pycache__/
+*.pyc
+
+# --- saídas do build (o .exe vai para as Releases do GitHub, não para o repositório) ---
+build/*.spec
+build/work/
+build/teste/
+build/strings_pt.json
+compilado/
+
+# --- projetos de terceiros baixados só para consulta (security/check.py e upstream.py) ---
+referencias/
+
+# --- protótipo antigo ---
+otimizador/
+
+# --- arquivos pessoais / da máquina local ---
+.claude/
+README.pt-BR.md
+security/personal.txt
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

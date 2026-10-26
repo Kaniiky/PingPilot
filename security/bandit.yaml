@@ -1,0 +1,5 @@
+# Configuração do bandit para o PingPilot.
+# B404/B603/B607: o app existe para chamar ferramentas do Windows (ping, netsh, powershell, tasklist…).
+# Todas as chamadas usam lista de argumentos, sem shell=True; valores variáveis que entram em
+# comandos PowerShell são conferidos pela verificação "injeção em comandos PowerShell" do check.py.
+skips: ["B404", "B603", "B607"]
