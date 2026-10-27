@@ -23,17 +23,11 @@ It is a non-profit hobby project. Take it, fork it, change it — that's the poi
   their CPU priority when they open, measures the ping to the game server, traces the route hop by hop and
   records a summary of each match.
 - **Network analyzer** — real-time ping/jitter/loss to your router, Cloudflare/Google and AWS; a diagnosis that
-  tells you whether the problem is your Wi-Fi, your ISP or the route; a speed test with bufferbloat grade; and a
-  list of every device on your network.
+  tells you whether the problem is your Wi-Fi, your ISP or the route; and a list of every device on your network.
 - **PC Boost** — 19 Windows tweaks curated from WinUtil, KOALA and HoneCTRL, each one explained, reversible and
   backed up. Tweaks that are risky (e.g. disabling Spectre mitigations) are deliberately left out.
 - **DNS Optimizer** — benchmarks 10 public DNS providers plus your own, and can switch to the fastest one
   automatically (never during a match).
-- **Cleaner** — frees disk space from temp files, update caches, browser caches (never cookies or passwords),
-  shader caches and more. Analyze first, choose what goes. Plus RAM standby cleanup with an automatic routine.
-- **Multi Internet** — two connections at once (cable + Wi-Fi or phone): keeps your main one first and fails over to
-  the backup when its internet drops, then switches back.
-- **Traffic limiter** — caps the upload of cloud-sync and torrent apps so they don't flood your connection.
 - **Drivers** — finds newer drivers on the official Windows Update catalog and installs them.
 - **Wi-Fi optimizer** — stops Windows from scanning for networks mid-match (the cause of 100 ms+ spikes on laptops).
 - **Quality of life** — tray icon, notification center, English / Português / Español, 7 themes,
@@ -42,9 +36,7 @@ It is a non-profit hobby project. Take it, fork it, change it — that's the poi
 ## What it does *not* do
 
 PingPilot does not change the route your traffic takes across the internet — that requires relay servers,
-which is exactly what paid services sell. For the same reason Multi Internet does not add up the speed of two
-connections or duplicate packets, and the traffic limiter only limits upload (download limiting needs a network
-driver). A free "smart route" (using Cloudflare WARP) is being explored for 2.0.
+which is exactly what paid services sell. A free "smart route" (using Cloudflare WARP) is being explored for 2.0.
 
 ## Download
 
@@ -92,8 +84,7 @@ Content-Security-Policy, the dev server and the release package. See [SECURITY.m
 ## Project layout
 
 ```
-pingpilot/      the app — app.py (API + window), core.py, winproc.py, tweaks.py, drivers.py, speedtest.py,
-                cleaner.py, multinet.py, limiter.py, ui/
+pingpilot/      the app — app.py (API + window), core.py, winproc.py, tweaks.py, drivers.py, ui/
 build/          build script, icon, translations generator (make_i18n.py), real-window test
 security/       security battery and its reviewed allowlists
 ```

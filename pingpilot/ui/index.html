@@ -18,9 +18,7 @@
     <button class="nav" data-page="connections" title="Conexões"><i data-icon="signal"></i></button>
     <button class="nav" data-page="analyzer" title="Analisador de rede"><i data-icon="router"></i></button>
     <button class="nav" data-page="boost" title="PC Boost"><i data-icon="bolt"></i></button>
-    <button class="nav" data-page="cleaner" title="Limpador"><i data-icon="broom"></i></button>
     <button class="nav" data-page="drivers" title="Drivers"><i data-icon="chip"></i></button>
-    <button class="nav" data-page="multinet" title="Multi Internet"><i data-icon="route"></i></button>
     <button class="nav" data-page="wifi" title="Otimizador de Wi-Fi"><i data-icon="wifi"></i></button>
     <button class="nav" data-page="settings" title="Configurações"><i data-icon="gear"></i></button>
     <button class="nav" data-page="about" title="Sobre e créditos"><i data-icon="help"></i></button>
@@ -142,7 +140,6 @@
         <div class="tabs" data-tabs="analyzer">
           <button class="tab active" data-tab="monitor">Monitoramento em tempo real</button>
           <button class="tab" data-tab="pingtest">Ping para jogos</button>
-          <button class="tab" data-tab="speed">Velocidade</button>
           <button class="tab" data-tab="lan">Dispositivos na rede</button>
           <button class="tab" data-tab="tools">Ferramentas</button>
         </div>
@@ -208,48 +205,6 @@
           </div>
         </div>
 
-        <div class="tabpane" data-pane="speed">
-          <div class="panel">
-            <div class="row wrap">
-              <div><b class="bar-title">Teste de velocidade</b>
-                <p class="muted small">Download, upload e o ping enquanto a conexão está ocupada (bufferbloat) — o lag que aparece quando alguém da casa está baixando ou vendo vídeo.</p></div>
-              <div class="grow"></div>
-              <select class="select" id="speedServer" title="Servidor do teste"><option value="mlab">M-Lab — o mesmo do teste do Google (servidor no Brasil)</option><option value="auto">LibreSpeed automático (menor ping)</option></select>
-              <button class="btn primary" id="speedStart"><i data-icon="play"></i>Iniciar teste</button>
-            </div>
-            <div class="speed-warn hidden" id="speedWarn"></div>
-            <div class="speed-grid">
-              <div class="speed-big"><span>Download</span><b id="spDown">—</b><small>Mbps</small></div>
-              <div class="speed-big"><span>Upload</span><b id="spUp">—</b><small>Mbps</small></div>
-              <div class="speed-stat"><span>Ping</span><b id="spPing">—</b></div>
-              <div class="speed-stat"><span>Jitter</span><b id="spJit">—</b></div>
-              <div class="speed-stat grade-box"><span>Bufferbloat</span><b id="spGrade">—</b><small id="spBloat"></small></div>
-            </div>
-            <div class="speed-live hidden" id="speedLive">
-              <div class="row"><b id="spPhase"></b><div class="grow"></div><span class="muted small" id="spServer"></span></div>
-              <div class="bar-track"><div class="bar-fill" id="spBar" style="width:0%"></div></div>
-            </div>
-            <div class="row speed-loaded">
-              <span class="muted">Ping em uso:</span><span>no download <b id="spPingDown">—</b></span><span>no upload <b id="spPingUp">—</b></span>
-              <div class="grow"></div><span class="muted small" id="spData"></span>
-            </div>
-            <p class="hint">M-Lab (Measurement Lab) é a mesma rede de servidores do teste de velocidade do Google, com servidores no Brasil. Os servidores públicos do LibreSpeed ficam fora do Brasil; você também pode usar um próprio. Um teste usa de 100 MB a 1 GB de internet.</p>
-            <p class="hint" id="speedMlabNote">Com o M-Lab, o resultado do teste e o seu endereço IP são publicados pelo Measurement Lab como dados abertos de pesquisa — igual ao teste do Google.</p>
-            <div class="row add-row">
-              <input class="input" id="speedCustom" placeholder="Servidor LibreSpeed próprio (opcional), ex.: https://speedtest.suaoperadora.com.br/">
-              <button class="btn outline" id="speedUseCustom">Usar este servidor</button>
-            </div>
-          </div>
-          <div class="panel">
-            <h3>Histórico</h3>
-            <table class="table" id="speedTable">
-              <thead><tr><th>Data</th><th>Download</th><th>Upload</th><th>Ping</th><th>Jitter</th><th>Bufferbloat</th><th>Servidor</th></tr></thead>
-              <tbody></tbody>
-            </table>
-            <div class="empty" id="speedEmpty">Nenhum teste ainda.</div>
-          </div>
-        </div>
-
         <div class="tabpane" data-pane="lan">
           <div class="panel">
             <div class="row wrap">
@@ -285,7 +240,6 @@
           <button class="tab" data-tab="windows">Privacidade</button>
           <button class="tab" data-tab="dns">DNS Optimizer</button>
           <button class="tab" data-tab="clean">Limpeza</button>
-          <button class="tab" data-tab="limiter">Limitador de tráfego</button>
         </div>
         <div class="panel bar preset-bar" id="presetBar">
           <b class="bar-title">Melhorias no desempenho do sistema</b>
@@ -320,85 +274,12 @@
             </div>
           </div>
         </div>
-        <div class="tabpane" data-pane="limiter">
-          <div class="panel">
-            <div class="row wrap">
-              <div class="grow"><b class="bar-title">Limitador de tráfego</b>
-                <p class="muted small">Põe um teto no <b>upload</b> de programas como OneDrive, Google Drive e torrent. Upload cheio é a causa mais comum de ping alto em casa: o roteador enfileira os pacotes do jogo atrás dos do backup.</p></div>
-            </div>
-            <div class="row add-row">
-              <input class="input" id="limExe" placeholder="Programa (ex.: OneDrive.exe)">
-              <select class="select" id="limMbps"><option value="0.5">0,5 Mbps</option><option value="1">1 Mbps</option><option value="2" selected>2 Mbps</option><option value="5">5 Mbps</option><option value="10">10 Mbps</option><option value="20">20 Mbps</option></select>
-              <button class="btn outline" id="limAdd"><i data-icon="plus"></i>Limitar</button>
-            </div>
-            <div class="lim-sugg" id="limSugg"></div>
-          </div>
-          <div class="panel"><div id="limList"></div></div>
-          <div class="info-box"><i data-icon="help"></i><span>Usa as políticas de QoS do próprio Windows, que só controlam o que <b>sai</b> do PC. Limitar o download de outros programas exigiria instalar um driver de rede, então o PingPilot não faz. Os limites continuam valendo com o PingPilot fechado, até você remover.</span></div>
-        </div>
         <div class="tabpane" data-pane="clean">
-          <div class="panel ram-panel">
-            <div class="row">
-              <h3 class="ram-title">Limpeza de RAM</h3>
-              <span class="help" title="Esvazia a memória em espera (cache) do Windows — técnica do HoneCTRL. Ajuda em engasgos de jogos que ficam abertos por horas; no resto do tempo o Windows já gerencia sozinho.">?</span>
-              <span class="vsep"></span><span class="muted small" id="ramLast">Nenhuma limpeza ainda</span>
-              <span class="tag amber hidden" id="ramNeeds">Precisa de limpeza</span>
-              <div class="grow"></div>
-              <button class="btn danger" id="ramClean"><i data-icon="broom"></i>Limpar</button>
-            </div>
-            <div class="ram-bar" id="ramBar"><span class="used"></span><span class="cache"></span></div>
-            <div class="row ram-legend">
-              <span><i class="sw used"></i>Em uso <b id="ramUsed">—</b></span>
-              <span id="ramCacheItem"><i class="sw cache"></i>Cache em espera <b id="ramCache">—</b></span>
-              <span><i class="sw free"></i>Livre <b id="ramFree">—</b></span>
-              <div class="grow"></div><span class="muted small" id="ramTotal"></span>
-            </div>
-          </div>
-          <div class="two-col">
-            <div class="panel">
-              <div class="row"><h3 class="ram-title">Rotina</h3><span class="vsep"></span>
-                <label class="switch"><input type="checkbox" id="ramAuto"><span></span></label><b>Automatizar limpezas</b>
-                <span class="help" title="O PingPilot limpa sozinho, sem você clicar, e avisa no sino quanto foi liberado. Precisa estar aberto como administrador.">?</span></div>
-              <p class="muted small ram-when">Executar quando:</p>
-              <label class="radio"><input type="radio" name="ramTrigger" value="game"><span>um jogo da sua lista abre</span></label>
-              <div class="row"><label class="radio grow"><input type="radio" name="ramTrigger" value="status"><span>o status muda para “Precisa de limpeza”</span></label>
-                <select class="select" id="ramInterval"><option value="3600">No máximo 1 vez por hora</option><option value="21600">No máximo a cada 6 horas</option><option value="43200">No máximo a cada 12 horas</option><option value="86400">No máximo 1 vez por dia</option></select></div>
-              <div class="info-box"><i data-icon="help"></i><span>O processo de limpeza é rápido, mas o sistema pode ficar lento por um breve momento enquanto o Windows recarrega o que estava em cache.</span></div>
-            </div>
-            <div class="panel">
-              <h3 class="ram-title">O que é limpo</h3>
-              <p class="muted">Só o <b>cache em espera</b> do Windows: arquivos que já foram usados e ficaram guardados na RAM “por via das dúvidas”. Os programas e jogos abertos não são tocados, por isso não há lista de exceções.</p>
-              <p class="muted">“Precisa de limpeza” aparece quando sobra pouca RAM realmente livre (menos de 10% ou 1 GB) e há mais de 2 GB parados nesse cache.</p>
-            </div>
-          </div>
           <div class="cards-grid tools">
-            <div class="card tool"><i data-icon="trash" class="tool-icon"></i><h3>Limpar arquivos do disco</h3><p>Temporários, cache de navegadores, Windows Update, shaders e mais — escolha o que apagar no Limpador.</p><button class="btn outline" id="openCleaner">Abrir o Limpador</button></div>
+            <div class="card tool"><i data-icon="memory" class="tool-icon"></i><h3>Limpeza de RAM</h3><p>Esvazia a memória em espera (cache) do Windows (HoneCTRL). Ajuda em engasgos de jogos que ficam abertos por horas; no resto do tempo o Windows já gerencia sozinho.</p><button class="btn outline" data-tool="ram">Limpar agora</button></div>
+            <div class="card tool"><i data-icon="trash" class="tool-icon"></i><h3>Apagar arquivos temporários</h3><p>Remove o conteúdo das pastas Temp do usuário e do Windows (WinUtil). Arquivos em uso são ignorados.</p><button class="btn outline" data-tool="temp" data-confirm="Apagar permanentemente os arquivos temporários?">Limpar</button></div>
             <div class="card tool"><i data-icon="shield" class="tool-icon"></i><h3>Criar ponto de restauração</h3><p>Salva o estado do Windows antes de mexer em ajustes (WinUtil). O Windows permite um por dia.</p><button class="btn outline" data-tool="restore_point">Criar</button></div>
             <div class="card tool"><i data-icon="broom" class="tool-icon"></i><h3>Limpar cache DNS</h3><p>Descarta endereços guardados que podem estar desatualizados.</p><button class="btn outline" data-tool="flush_dns">Executar</button></div>
-          </div>
-        </div>
-      </section>
-
-      <!-- LIMPADOR -->
-      <section class="page" id="page-cleaner">
-        <div class="banner green"></div>
-        <div class="section-head">
-          <h1>Limpador</h1>
-          <div class="row">
-            <button class="btn outline" id="clScan"><i data-icon="search"></i>Analisar</button>
-            <button class="btn danger" id="clClean" disabled><i data-icon="broom"></i>Limpar selecionados</button>
-          </div>
-        </div>
-        <p class="sub">Apaga só arquivos que o Windows e os programas recriam sozinhos. Nos navegadores é só o cache — <b>cookies, histórico, senhas e logins nunca são tocados</b>. Itens de programas abertos são pulados.</p>
-        <div class="cleaner">
-          <div class="panel cl-list" id="clList"><div class="empty">Clique em “Analisar” para ver quanto espaço pode ser liberado.</div></div>
-          <div class="panel cl-summary">
-            <p class="muted small">Selecionado para limpar</p>
-            <div class="cl-total" id="clTotal">—</div>
-            <p class="muted small" id="clCount"></p>
-            <div class="cl-result hidden" id="clResult"></div>
-            <p class="muted small" id="clLast"></p>
-            <div class="info-box"><i data-icon="help"></i><span>Arquivos em uso são ignorados e ficam para a próxima. Itens em cinza precisam do PingPilot aberto como administrador.</span></div>
           </div>
         </div>
       </section>
@@ -421,26 +302,6 @@
           <div class="drv-head"><b id="drvOkTitle">Instalados</b><div class="grow"></div><input class="input" id="drvFilter" placeholder="Filtrar dispositivos…"></div>
           <div id="drvInstalled"></div>
         </div>
-      </section>
-
-      <!-- MULTI INTERNET -->
-      <section class="page" id="page-multinet">
-        <div class="banner blue"></div>
-        <div class="section-head"><h1>Multi Internet</h1><button class="btn outline" id="mnRefresh"><i data-icon="refresh"></i>Atualizar</button></div>
-        <p class="sub">Use duas conexões ao mesmo tempo — cabo + Wi-Fi, ou cabo + celular roteado por USB. Escolha a principal; se a internet dela cair, a reserva assume sozinha e a principal volta quando ficar estável.</p>
-        <div class="mn-modes" id="mnModes">
-          <button class="mn-mode" data-mode="off"><b>Desligado</b><span>O Windows decide qual conexão usar (padrão).</span></button>
-          <button class="mn-mode" data-mode="priority"><b>Prioridade</b><span>A principal sempre na frente; a outra só é usada se o cabo/Wi-Fi da principal desconectar.</span></button>
-          <button class="mn-mode" data-mode="failover"><b>Failover automático</b><span>Testa a principal a cada 5 s. Se a internet dela cair (mesmo com o cabo ligado), troca para a reserva.</span><span class="tag green">Recomendado</span></button>
-        </div>
-        <p class="chip hidden" id="mnState"></p>
-        <div class="panel"><div id="mnList"><div class="empty">Carregando conexões…</div></div></div>
-        <div class="panel hidden" id="mnOfflinePanel">
-          <b>Placas de rede sem internet agora</b>
-          <p class="muted small">Conecte uma delas (ex.: ligue o Wi-Fi numa rede, mesmo com o cabo plugado) para ter uma reserva.</p>
-          <div id="mnOffline"></div>
-        </div>
-        <div class="info-box"><i data-icon="help"></i><span>O Multi Internet não soma a velocidade das duas conexões nem duplica pacotes — isso exige um servidor intermediário pago (como o Speedify). Na troca, conexões já abertas (inclusive a partida) podem cair e reconectar pela reserva.</span></div>
       </section>
 
       <!-- WI-FI -->
@@ -495,10 +356,6 @@
               <span>Avisar quando o DNS automático trocar de servidor</span><span class="help" title="Registra no sino qual DNS o PingPilot escolheu e quanto ele é mais rápido que o anterior.">?</span></div>
             <div class="setting"><label class="switch"><input type="checkbox" data-setting="notify_session"><span></span></label>
               <span>Resumo ao terminar uma partida</span><span class="help" title="Quando o jogo fecha, guarda no sino o ping médio, o jitter e a perda de pacotes da partida.">?</span></div>
-            <div class="setting"><label class="switch"><input type="checkbox" data-setting="notify_ram"><span></span></label>
-              <span>Avisar quando a limpeza automática de RAM rodar</span><span class="help" title="Guarda no sino quanto a limpeza automática liberou (PC Boost > Limpeza > Rotina).">?</span></div>
-            <div class="setting"><label class="switch"><input type="checkbox" data-setting="notify_multinet"><span></span></label>
-              <span>Avisar quando o Multi Internet trocar de conexão</span><span class="help" title="Mostra uma notificação do Windows quando a conexão principal cai e a reserva assume, e quando a principal volta.">?</span><span class="tag">Recomendado</span></div>
             <div class="setting"><label class="switch"><input type="checkbox" data-setting="notify_upstream"><span></span></label>
               <span>Avisar quando um projeto de origem mudar no GitHub</span><span class="help" title="Ao abrir, confere WinUtil, KOALA e WLANOptimizer. Se algum mudou nos arquivos que o PingPilot usa, avisa no sino para alguém revisar.">?</span></div>
           </div>
@@ -545,9 +402,6 @@
               <li><b>WinUtil</b> — Chris Titus Tech, licença MIT. Ajustes de rede, privacidade, mouse, Modo de Jogo, limpeza e ponto de restauração.</li>
               <li><b>KOALA Gaming Optimizer</b> — koalaaufpillen, licença MIT. Ajustes de MMCSS, Nagle, limitação de rede, Game DVR, prioridade e energia.</li>
               <li><b>WLANOptimizer</b> — Christopher A. Taylor, licença BSD-3. Técnica do otimizador de Wi-Fi.</li>
-              <li><b>Measurement Lab (M-Lab)</b> — consórcio M-Lab, Apache-2.0. Protocolo NDT7 e servidores do teste de velocidade (os mesmos do teste do Google).</li>
-              <li><b>LibreSpeed</b> — Federico Dossena e colaboradores, licença LGPL-3. Servidores públicos e protocolo usados pelo teste de velocidade.</li>
-              <li><b>BleachBit</b> — Andrew Ziem e colaboradores, licença GPL-3. Inspiração para o Limpador (só caches, prévia antes de apagar, nunca seguir atalhos); nenhum código é usado.</li>
               <li><b>HoneCTRL 2.7</b> — Auraside (Hone), licença GNU AGPLv3. Economia de energia da placa de rede, cache de falhas de DNS, QoS para jogos e limpeza de RAM. Ideias reimplementadas do zero; nenhum código ou arquivo do Hone é usado.</li>
             </ul>
           </div>

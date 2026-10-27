@@ -70,25 +70,12 @@ function duration(sec) {
   return [h, m, s].map((n) => String(n).padStart(2, "0")).join(":");
 }
 
-function toast(msg, err = false, title = null) {
+function toast(msg, err = false) {
   const el = document.createElement("div");
   el.className = "toast" + (err ? " err" : "");
-  const ms = err ? 7000 : title ? 6000 : 3500;
-  if (title) {  // aviso com título e barrinha de tempo (ex.: limpeza de RAM)
-    const b = document.createElement("b");
-    b.className = "t-title";
-    b.textContent = title;
-    const span = document.createElement("span");
-    span.textContent = msg;
-    const bar = document.createElement("div");
-    bar.className = "t-bar";
-    bar.style.animationDuration = `${ms}ms`;
-    el.append(b, span, bar);
-  } else {
-    el.textContent = msg;
-  }
+  el.textContent = msg;
   $("#toasts").appendChild(el);
-  setTimeout(() => el.remove(), ms);
+  setTimeout(() => el.remove(), err ? 7000 : 3500);
 }
 
 // ponte com o Python: pywebview (janela) ou HTTP (modo --browser)
@@ -166,15 +153,13 @@ function go(page, scrollTo) {
 }
 
 function onPage(page) {
-  if (page === "boost") { loadTweaks(); loadDns(); loadRam(); }
+  if (page === "boost") { loadTweaks(); loadDns(); }
   if (page === "drivers") loadDrivers();
-  if (page === "cleaner" && !state.cleaner) $("#clScan").click();
   if (page === "settings") { loadSettings(); refreshLogs(); }
   if (page === "about") loadTweaks();
-  if (page === "analyzer") { refreshMonitor(); renderTargets(); loadSpeed(); }
+  if (page === "analyzer") { refreshMonitor(); renderTargets(); }
   if (page === "connections") refreshConnections();
   if (page === "wifi") renderWifi();
-  if (page === "multinet") loadMultinet();
 }
 
 function setupTabs() {
@@ -187,8 +172,7 @@ function setupTabs() {
       $$(".tabpane", pane).forEach((p) => p.classList.toggle("active", p.dataset.pane === btn.dataset.tab));
       if (tabs.dataset.tabs === "boost") {
         state.boostTab = btn.dataset.tab;
-        $("#presetBar").classList.toggle("hidden", ["dns", "clean", "limiter"].includes(btn.dataset.tab));
-        if (btn.dataset.tab === "limiter") loadLimiter();
+        $("#presetBar").classList.toggle("hidden", ["dns", "clean"].includes(btn.dataset.tab));
       }
       if (tabs.dataset.tabs === "analyzer" && btn.dataset.tab === "monitor") refreshMonitor();
     });
@@ -217,13 +201,6 @@ async function refreshOverview() {
   $("#bellBadge").classList.toggle("hidden", !o.alerts_unread);
   if (!$("#alertPanel").classList.contains("hidden") && o.alerts_unread !== state.lastUnread) loadAlerts();
   state.lastUnread = o.alerts_unread;
-  // limpeza automática de RAM feita em segundo plano: mostra o aviso com quanto foi liberado
-  const lastRam = o.ram_last?.time || 0;
-  if (state.ramSeen !== undefined && lastRam > state.ramSeen && o.ram_last.auto) {
-    toast(ramMessage(o.ram_last), false, "Limpeza automática concluída!");
-    if (state.page === "boost") loadRam();
-  }
-  state.ramSeen = lastRam;
   renderSession(o);
   if (state.page === "home") refreshHomeHealth();
   if (state.page === "wifi") renderWifi();
@@ -1015,337 +992,10 @@ function setupSettings() {
   };
 }
 
-// ---------------------------------------------------------------- limpeza de RAM
-const gb = (mb) => (mb == null ? "—" : `${(mb / 1024).toFixed(1)} GB`);
-function ramMessage(r) {
-  return r.freed == null ? t("Memória em espera liberada") : t("{0} MB liberados · {1} MB livres agora", r.freed, r.free);
-}
-
-async function loadRam() {
-  const d = await safe("ram_status");
-  if (!d) return;
-  const m = d.memory;
-  const used = m.used - (m.standby || 0) > 0 && m.standby != null ? m.used : m.used;
-  $("#ramBar .used").style.width = `${(used / m.total) * 100}%`;
-  $("#ramBar .cache").style.width = `${((m.standby || 0) / m.total) * 100}%`;
-  $("#ramUsed").textContent = gb(used);
-  $("#ramCache").textContent = gb(m.standby);
-  $("#ramCacheItem").classList.toggle("hidden", m.standby == null);
-  $("#ramFree").textContent = gb(m.free);
-  $("#ramTotal").textContent = `${gb(m.total)} total`;
-  $("#ramNeeds").classList.toggle("hidden", !d.needs);
-  $("#ramLast").textContent = d.last
-    ? `Última limpeza em ${new Date(d.last.time * 1000).toLocaleString(I18N.lang, { dateStyle: "short", timeStyle: "short" })}`
-    : "Nenhuma limpeza ainda";
-  $("#ramAuto").checked = d.auto;
-  $$('input[name="ramTrigger"]').forEach((r) => (r.checked = r.value === d.trigger));
-  $("#ramInterval").value = String(d.interval);
-  $("#ramClean").disabled = !d.admin;
-  $("#ramClean").title = d.admin ? "" : "Precisa de administrador";
-}
-
-function setupRam() {
-  $("#ramClean").onclick = () => busy($("#ramClean"), async () => {
-    const r = await waitJob(await call("ram_clean"));
-    state.ramSeen = r.time;
-    toast(ramMessage(r), false, "Limpeza concluída!");
-    loadRam();
-  });
-  $("#ramAuto").onchange = async (e) => {
-    const res = await safe("setting_set", "ram_auto", e.target.checked);
-    e.target.checked = !!res;
-  };
-  $$('input[name="ramTrigger"]').forEach((r) => (r.onchange = () => safe("setting_set", "ram_trigger", r.value)));
-  $("#ramInterval").onchange = (e) => safe("setting_set", "ram_interval", e.target.value);
-  setInterval(() => {
-    if (state.page === "boost" && $('[data-pane="clean"]').classList.contains("active")) loadRam();
-  }, 3000);
-}
-
-// ---------------------------------------------------------------- limpador de arquivos
-function bytes(n) {
-  if (n == null) return "—";
-  const u = ["B", "KB", "MB", "GB", "TB"];
-  let i = 0;
-  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
-  return `${n.toFixed(i >= 3 ? 1 : 0)} ${u[i]}`;
-}
-
-function cleanerSelected() {
-  return $$("#clList input[data-id]:checked").map((c) => c.dataset.id);
-}
-
-function cleanerTotals() {
-  const items = state.cleaner?.items || [];
-  const sel = new Set(cleanerSelected());
-  const chosen = items.filter((x) => sel.has(x.id));
-  $("#clTotal").textContent = bytes(chosen.reduce((a, x) => a + x.size, 0));
-  $("#clCount").textContent = t("{0} itens · {1} arquivos", chosen.length, chosen.reduce((a, x) => a + x.files, 0));
-  $("#clClean").disabled = !chosen.length;
-}
-
-function renderCleaner() {
-  const d = state.cleaner;
-  const saved = state.cleanerPick;  // marcações do usuário sobrevivem a uma nova análise
-  const groups = [...new Set(d.items.map((x) => x.group))];
-  $("#clList").innerHTML = groups.map((g) => `
-    <h3 class="cl-group">${esc(tr(g))}</h3>
-    ${d.items.filter((x) => x.group === g).map((x) => {
-      const off = x.locked || x.blocked.length > 0;
-      const on = !off && (saved ? saved.has(x.id) : x.default);
-      const note = x.locked ? tr("Precisa de administrador")
-        : x.blocked.length ? t("Feche {0} para limpar", x.blocked.join(", ")) : "";
-      return `
-      <label class="cl-item${off ? " off" : ""}">
-        <input type="checkbox" data-id="${esc(x.id)}" ${on ? "checked" : ""} ${off ? "disabled" : ""}>
-        <i data-icon="${esc(x.icon)}"></i>
-        <span class="grow"><b>${esc(tr(x.title))}</b><span class="muted small">${esc(tr(x.desc))}</span>
-          ${x.warn ? `<span class="cl-warn small">${esc(tr("Não recomendado se:"))} ${esc(tr(x.warn))}</span>` : ""}
-          ${note ? `<span class="tag amber">${esc(note)}</span>` : ""}</span>
-        <span class="cl-size${x.size ? "" : " muted"}">${esc(bytes(x.size))}</span>
-      </label>`;
-    }).join("")}`).join("");
-  hydrateIcons($("#clList"));
-  $$("#clList input[data-id]").forEach((c) => (c.onchange = () => {
-    state.cleanerPick = new Set(cleanerSelected());
-    cleanerTotals();
-  }));
-  $("#clLast").textContent = d.last
-    ? t("Última limpeza: {0} liberados em {1}", bytes(d.last.freed),
-      new Date(d.last.time * 1000).toLocaleString(I18N.lang, { dateStyle: "short", timeStyle: "short" }))
-    : "";
-  cleanerTotals();
-}
-
-function setupCleaner() {
-  $("#openCleaner").onclick = () => go("cleaner");
-  $("#clScan").onclick = () => busy($("#clScan"), async () => {
-    state.cleaner = await waitJob(await call("cleaner_scan"));
-    renderCleaner();
-  });
-  $("#clClean").onclick = () => busy($("#clClean"), async () => {
-    const ids = cleanerSelected();
-    const risky = state.cleaner.items.filter((x) => ids.includes(x.id) && x.warn).map((x) => tr(x.title));
-    let msg = t("Apagar permanentemente {0}?", $("#clTotal").textContent);
-    if (risky.length) msg += "\n\n" + t("Atenção: {0}", risky.join(", "));
-    if (!confirm(msg)) return;
-    const r = await waitJob(await call("cleaner_clean", ids));
-    const skipped = r.skipped.length ? " " + t("{0} item(ns) pulado(s).", r.skipped.length) : "";
-    $("#clResult").textContent = t("{0} liberados · {1} arquivos apagados", bytes(r.freed), r.files) + skipped;
-    $("#clResult").classList.remove("hidden");
-    toast(t("{0} liberados · {1} arquivos apagados", bytes(r.freed), r.files) + skipped, false, tr("Limpeza concluída!"));
-    state.cleaner = await waitJob(await call("cleaner_scan"));
-    renderCleaner();
-  });
-}
-
-// ---------------------------------------------------------------- limitador de tráfego
-async function loadLimiter() {
-  const d = await safe("limiter_list");
-  if (!d) return;
-  $("#limAdd").disabled = !d.admin;
-  $("#limAdd").title = d.admin ? "" : tr("Precisa de administrador");
-  $("#limSugg").innerHTML = d.suggestions.length
-    ? `<span class="muted small">${esc(tr("Sugestões:"))}</span> ` + d.suggestions.map((s) =>
-      `<button class="chip-btn${s.running ? " on" : ""}" data-exe="${esc(s.exe)}" title="${esc(tr(s.running ? "Aberto agora" : ""))}">${esc(s.exe)}</button>`).join("")
-    : "";
-  $("#limList").innerHTML = d.limits.length ? `
-    <table class="table"><thead><tr><th>${esc(tr("Programa"))}</th><th>${esc(tr("Upload máximo"))}</th><th></th></tr></thead><tbody>
-    ${d.limits.map((x) => `<tr><td><b>${esc(x.exe)}</b></td><td>${esc(x.mbps)} Mbps</td>
-      <td class="right"><button class="btn outline small" data-lim-remove="${esc(x.exe)}" ${d.admin ? "" : "disabled"}>${esc(tr("Remover"))}</button></td></tr>`).join("")}
-    </tbody></table>` : `<div class="empty">${esc(tr("Nenhum programa limitado."))}</div>`;
-}
-
-function setupLimiter() {
-  $("#limSugg").onclick = (e) => {
-    const b = e.target.closest("[data-exe]");
-    if (b) { $("#limExe").value = b.dataset.exe; $("#limExe").focus(); }
-  };
-  $("#limAdd").onclick = () => busy($("#limAdd"), async () => {
-    const exe = $("#limExe").value.trim();
-    if (!exe) return toast(tr("Digite o nome do programa."), true);
-    const done = await call("limiter_set", exe, Number($("#limMbps").value));
-    toast(t("Upload de {0} limitado a {1} Mbps", done, $("#limMbps").value));
-    $("#limExe").value = "";
-    loadLimiter();
-  });
-  $("#limList").onclick = (e) => {
-    const b = e.target.closest("[data-lim-remove]");
-    if (b) busy(b, async () => { await call("limiter_remove", b.dataset.limRemove); loadLimiter(); });
-  };
-}
-
-// ---------------------------------------------------------------- multi internet
-const MN_STATUS = { Disconnected: "Desconectado", Up: "Conectado, sem internet", Disabled: "Desativado",
-  "Not Present": "Não encontrado" };
-const MN_KIND = { ethernet: ["router", "Cabo"], wifi: ["wifi", "Wi-Fi"], mobile: ["signal", "Celular / USB"] };
-
-async function loadMultinet() {
-  const d = await safe("multinet_status");
-  if (!d) return;
-  state.multinet = d;
-  $$("#mnModes .mn-mode").forEach((b) => {
-    b.classList.toggle("active", b.dataset.mode === d.mode);
-    b.disabled = !d.admin;
-  });
-  const using = d.adapters[0]?.alias;  // a lista vem em ordem de prioridade (menor métrica primeiro)
-  $("#mnState").classList.toggle("hidden", !d.adapters.length);
-  $("#mnState").textContent = !d.admin ? tr("Precisa de administrador para mudar a prioridade.")
-    : d.failed_over ? t("A principal ({0}) caiu: usando {1} até ela voltar.", d.primary, using)
-    : t("Saindo pela internet de: {0}", using || "—");
-  $("#mnList").innerHTML = d.adapters.length ? d.adapters.map((a) => {
-    const [icon, kind] = MN_KIND[a.kind] || MN_KIND.ethernet;
-    const p = a.probe || {};
-    const isMain = d.mode !== "off" && a.alias === d.primary;
-    return `
-    <div class="mn-row${a.alias === using ? " using" : ""}">
-      <i data-icon="${icon}"></i>
-      <div class="grow"><b>${esc(a.alias)}</b> <span class="tag">${esc(tr(kind))}</span>
-        ${isMain ? `<span class="tag green">${esc(tr("Principal"))}</span>` : ""}
-        ${a.alias === using ? `<span class="tag blue">${esc(tr("Em uso"))}</span>` : ""}
-        <div class="muted small">${esc(a.desc)} · ${esc(a.ip || "")} · ${esc(a.speed || "")} · ${esc(tr("métrica"))} ${esc(a.metric)}</div></div>
-      <div class="mn-ping ${p.ok ? (p.ping < 60 ? "good" : "fair") : "bad"}">${p.ok ? ms(p.ping) : esc(tr("Sem internet"))}</div>
-      <button class="btn ${isMain ? "primary" : "outline"} small" data-primary="${esc(a.alias)}" ${d.admin ? "" : "disabled"}>
-        ${esc(tr(isMain ? "Principal" : "Tornar principal"))}</button>
-    </div>`;
-  }).join("") : `<div class="empty">${esc(tr("Nenhuma conexão com internet encontrada."))}</div>`;
-  if (d.adapters.length < 2) {
-    $("#mnList").insertAdjacentHTML("beforeend",
-      `<p class="muted small mn-one">${esc(tr("Só uma conexão com internet agora: o failover precisa de duas ligadas ao mesmo tempo."))}</p>`);
-  }
-  hydrateIcons($("#mnList"));
-  $("#mnOfflinePanel").classList.toggle("hidden", !d.offline.length);
-  $("#mnOffline").innerHTML = d.offline.map((a) =>
-    `<div class="mn-off"><b>${esc(a.alias)}</b> <span class="muted small">${esc(a.desc)} · ${esc(tr(MN_STATUS[a.status] || a.status))}</span></div>`).join("");
-}
-
-function setupMultinet() {
-  $("#mnRefresh").onclick = () => busy($("#mnRefresh"), loadMultinet);
-  const apply = async (mode, primary) => {
-    const d = state.multinet;
-    primary = primary || (d.mode !== "off" && d.primary) || d.adapters[0]?.alias;
-    if (await safe("multinet_set", mode, primary)) {
-      toast(mode === "off" ? tr("Prioridades do Windows restauradas") : t("{0} é a conexão principal", primary));
-      loadMultinet();
-    }
-  };
-  $("#mnModes").onclick = (e) => {
-    const b = e.target.closest(".mn-mode");
-    if (b && !b.disabled) apply(b.dataset.mode);
-  };
-  $("#mnList").onclick = (e) => {
-    const b = e.target.closest("[data-primary]");
-    if (b) apply(state.multinet.mode === "off" ? "failover" : state.multinet.mode, b.dataset.primary);
-  };
-  setInterval(() => { if (state.page === "multinet") loadMultinet(); }, 5000);
-}
-
-// ---------------------------------------------------------------- teste de velocidade
-const SPEED_PHASES = { server: "Escolhendo o servidor…", ping: "Medindo o ping…", download: "Medindo o download…",
-  upload: "Medindo o upload…" };
-
-function gradeClass(g) {
-  return !g || g === "—" ? "" : ["A+", "A"].includes(g) ? "g-good" : g === "B" ? "g-fair" : "g-bad";
-}
-
-function showSpeed(r) {
-  $("#spDown").textContent = r.download ?? "—";
-  $("#spUp").textContent = r.upload ?? "—";
-  $("#spPing").textContent = ms(r.ping);
-  $("#spJit").textContent = ms(r.jitter);
-  $("#spGrade").textContent = r.grade || "—";
-  $("#spGrade").className = gradeClass(r.grade);
-  $("#spBloat").textContent = r.bloat == null ? "" : t("+{0} ms com a conexão ocupada", r.bloat);
-  $("#spPingDown").textContent = ms(r.ping_down);
-  $("#spPingUp").textContent = ms(r.ping_up);
-  $("#spData").textContent = r.data_mb ? t("{0} MB usados · {1}", r.data_mb, r.server) : "";
-}
-
-async function loadSpeed() {
-  const d = await safe("speed_history");
-  if (!d) return;
-  const warn = [d.in_game && "Uma partida está em andamento: o teste ocupa toda a conexão e causaria lag.",
-    d.vpn && t("VPN ligada ({0}): o resultado mede a VPN, não a sua internet.", d.vpn)].filter(Boolean);
-  $("#speedWarn").textContent = warn.map((w) => tr(w)).join(" ");
-  $("#speedWarn").classList.toggle("hidden", !warn.length);
-  $("#speedEmpty").classList.toggle("hidden", d.history.length > 0);
-  $("#speedTable tbody").innerHTML = d.history.map((r) => `
-    <tr>
-      <td class="muted">${esc(new Date(r.time * 1000).toLocaleString(I18N.lang, { dateStyle: "short", timeStyle: "short" }))}</td>
-      <td><b>${esc(r.download ?? "—")}</b> Mbps</td><td><b>${esc(r.upload ?? "—")}</b> Mbps</td>
-      <td>${ms(r.ping)}</td><td>${ms(r.jitter)}</td>
-      <td><b class="${gradeClass(r.grade)}">${esc(r.grade)}</b> <span class="muted small">${r.bloat == null ? "" : "+" + esc(r.bloat) + " ms"}</span></td>
-      <td class="muted">${esc(r.server)}</td>
-    </tr>`).join("");
-  if (d.history[0] && !state.speedRunning) showSpeed(d.history[0]);
-  if (!state.speedServers) {
-    state.speedServers = true;
-    const list = await safe("speed_servers");
-    if (list) {
-      $("#speedServer").insertAdjacentHTML("beforeend", `<optgroup label="LibreSpeed">${
-        list.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join("")}</optgroup>`);
-    }
-    const saved = d.server || "mlab";
-    if (saved.startsWith("https://")) addCustomOption(saved);
-    $("#speedServer").value = saved;
-    if (!$("#speedServer").value) $("#speedServer").value = "mlab";  // servidor salvo saiu da lista
-    $("#speedMlabNote").classList.toggle("hidden", $("#speedServer").value !== "mlab");
-  }
-}
-
-function addCustomOption(url) {
-  if (![...$("#speedServer").options].some((o) => o.value === url)) {
-    const o = document.createElement("option");
-    o.value = url;
-    o.textContent = url.replace(/^https:\/\//, "");
-    $("#speedServer").appendChild(o);
-  }
-  $("#speedServer").value = url;
-  $("#speedMlabNote").classList.add("hidden");
-}
-
-function setupSpeed() {
-  $("#speedServer").onchange = () => $("#speedMlabNote").classList.toggle("hidden", $("#speedServer").value !== "mlab");
-  $("#speedUseCustom").onclick = () => {
-    const url = $("#speedCustom").value.trim();
-    if (!/^https:\/\/[\w.-]+(:\d+)?(\/[\w./-]*)?$/.test(url)) return toast("Digite um endereço https:// válido.", true);
-    addCustomOption(url);
-    toast("Servidor escolhido. Clique em “Iniciar teste”.");
-  };
-  $("#speedStart").onclick = () => busy($("#speedStart"), async () => {
-    const d = await call("speed_history");
-    let force = false;
-    if (d.in_game) {
-      if (!confirm("Uma partida está em andamento. O teste ocupa toda a conexão e vai causar lag. Testar mesmo assim?")) return;
-      force = true;
-    }
-    state.speedRunning = true;
-    ["#spDown", "#spUp", "#spPing", "#spJit", "#spGrade", "#spPingDown", "#spPingUp"].forEach((id) => ($(id).textContent = "—"));
-    $("#spBloat").textContent = $("#spData").textContent = "";
-    $("#speedLive").classList.remove("hidden");
-    try {
-      const r = await waitJob(await call("speed_test", $("#speedServer").value, force), (p) => {
-        $("#spPhase").textContent = tr(SPEED_PHASES[p.phase] || "");
-        $("#spServer").textContent = p.server || "";
-        $("#spBar").style.width = `${Math.min(100, (p.elapsed / (p.seconds || 1)) * 100)}%`;
-        if (p.phase === "download") $("#spDown").textContent = p.mbps;
-        if (p.phase === "upload") $("#spUp").textContent = p.mbps;
-      });
-      showSpeed(r);
-      loadSpeed();
-    } finally {
-      state.speedRunning = false;
-      $("#speedLive").classList.add("hidden");
-    }
-  });
-}
-
 // ---------------------------------------------------------------- central de notificações
-const ALERT_ICONS = { upstream: "refresh", drivers: "chip", dns: "route", game: "gamepad", unstable: "pulse", session: "flag",
-  ram: "memory", multinet: "route" };
+const ALERT_ICONS = { upstream: "refresh", drivers: "chip", dns: "route", game: "gamepad", unstable: "pulse", session: "flag" };
 const ALERT_KINDS = { upstream: "Projetos de origem", drivers: "Drivers", dns: "DNS", game: "Jogo detectado",
-  unstable: "Conexão instável", session: "Partida", ram: "Limpeza de RAM",
-  multinet: "Multi Internet" };
+  unstable: "Conexão instável", session: "Partida" };
 
 function ago(ts) {
   const rtf = new Intl.RelativeTimeFormat(I18N.lang, { numeric: "auto" });
@@ -1435,7 +1085,7 @@ async function main() {
     if (g) go(g.dataset.goto, g.dataset.scroll);
   });
   $("#search").oninput = applySearch;
-  setupTabs(); setupProfiles(); setupModal(); setupAnalyzer(); setupBoost(); setupTools(); setupWifi(); setupSettings(); setupDrivers(); setupUpstream(); setupLan(); setupDetail(); setupAlerts(); setupHelp(); setupRam(); setupSpeed(); setupCleaner(); setupMultinet(); setupLimiter();
+  setupTabs(); setupProfiles(); setupModal(); setupAnalyzer(); setupBoost(); setupTools(); setupWifi(); setupSettings(); setupDrivers(); setupUpstream(); setupLan(); setupDetail(); setupAlerts(); setupHelp();
   await bridgeReady();
   const boot = await safe("settings_get");
   if (boot) {
