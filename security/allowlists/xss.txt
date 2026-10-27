@@ -4,6 +4,8 @@ COLORS[i]
 ICONS[name] || ICONS.help
 a === selectedApp ? "sel" : ""
 a.added ? `<span class="tag green">já adicionado</span>` : ""
+a.alias === using ? " using" : ""
+a.alias === using ? `<span class="tag blue">${esc(tr("Em uso"))}</span>` : ""
 a.company ? " · " + esc(a.company) : ""
 a.id
 a.kind
@@ -18,17 +20,25 @@ changed ? "amber" : r.status === "ok" ? "green" : ""
 changed ? `<button class="btn outline small up-ok" data-name="${esc(r.name)}">Marcar como revisado</button>` : ""
 cls
 d.Vendor ? `<button class="btn outline small vendor" data-url="${esc(d.Vendor.url)}">Site da ${esc(d.Vendor.name)}</button>` : ""
+d.admin ? "" : "disabled"
 d.host ? `<small>${esc(d.host)}</small>` : ""
+d.items.filter((x) => x.group === g).map((x) => { const off = x.locked || x.blocked.length > 0; const on = !off && (saved ? saved.has(x.id) : x.default); const note = x.locked ? tr("Precisa de administrador") : x.blocked.length ? t("Feche {0
+d.limits.map((x) => `<tr><td><b>${esc(x.exe)}</b></td><td>${esc(x.mbps)} Mbps</td> <td class="right"><button class="btn outline small" data-lim-remove="${esc(x.exe)}" ${d.admin ? "" : "disabled"}>${esc(tr("Remover"))}</button></td></tr>`).join("")
 d.name && d.label ? `<span class="muted small">${esc(d.name)}</span>` : ""
 d.ping == null ? `<span class="muted">não responde a ping</span>` : `${d.ping} ms`
 details.map((d) => `<small>${d}</small>`).join("")
+gradeClass(r.grade)
 h.avg == null ? "—" : h.avg + " ms"
 h.avg ? Math.max(3, (h.avg / worst) * 100) : 0
 h.hop
 hue
+icon
+isMain ? "primary" : "outline"
+isMain ? `<span class="tag green">${esc(tr("Principal"))}</span>` : ""
 k
 l
 l.t
+list.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join("")
 live ? ` <span class="tag green">ao vivo</span>` : ` <span class="tag">${esc(last.ended || "")}</span>`
 lvl
 p ? gameIcon(p, "session-icon") : ""
@@ -36,9 +46,12 @@ p.enabled ? "checked" : ""
 p.exes.length > 1 ? `<button class="icon-btn rm-exe" data-exe="${esc(e)}" title="Tirar do grupo">${svg("x")}</button>` : ""
 p.icon
 p.id
+p.ok ? (p.ping < 60 ? "good" : "fair") : "bad"
+p.ok ? ms(p.ping) : esc(tr("Sem internet"))
 p.running ? "on" : ""
 p.running ? "● Em execução" : "Automático"
 r.auto ? 'data-auto="1"' : ""
+r.bloat == null ? "" : "+" + esc(r.bloat) + " ms"
 r.current ? "disabled" : ""
 r.current ? `<span class="tag green">Em uso</span>` : ""
 r.custom ? `<button class="icon-btn rm-dns" data-p1="${esc(r.primary)}" title="Remover">${svg("x")}</button>` : ""
@@ -54,6 +67,7 @@ r.server ? `<div class="srv"><i data-icon="server"></i><span>${esc(r.host || "Se
 r.tcp
 r.udp
 rank
+s.running ? " on" : ""
 t.id
 t.locked ? "Precisa de administrador" : !t.available ? "Indisponível nesta conexão" : ""
 t.locked ? `<span class="tag amber">Admin</span>` : ""

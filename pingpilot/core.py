@@ -200,6 +200,68 @@ class _TOKEN_PRIVILEGES(ctypes.Structure):
     _fields_ = [("PrivilegeCount", wintypes.DWORD), ("Luid", _LUID), ("Attributes", wintypes.DWORD)]
 
 
+class _MEMORYSTATUSEX(ctypes.Structure):
+    _fields_ = [("dwLength", wintypes.DWORD), ("dwMemoryLoad", wintypes.DWORD), ("ullTotalPhys", ctypes.c_uint64),
+                ("ullAvailPhys", ctypes.c_uint64), ("ullTotalPageFile", ctypes.c_uint64), ("ullAvailPageFile", ctypes.c_uint64),
+                ("ullTotalVirtual", ctypes.c_uint64), ("ullAvailVirtual", ctypes.c_uint64),
+                ("ullAvailExtendedVirtual", ctypes.c_uint64)]
+
+
+class _SYSTEM_MEMORY_LIST_INFORMATION(ctypes.Structure):
+    _fields_ = [("ZeroPageCount", ctypes.c_size_t), ("FreePageCount", ctypes.c_size_t),
+                ("ModifiedPageCount", ctypes.c_size_t), ("ModifiedNoWritePageCount", ctypes.c_size_t),
+                ("BadPageCount", ctypes.c_size_t), ("PageCountByPriority", ctypes.c_size_t * 8),
+                ("RepurposedPagesByPriority", ctypes.c_size_t * 8), ("ModifiedPageCountPageFile", ctypes.c_size_t)]
+
+
+def _enable_profile_privilege():
+    """SeProfileSingleProcessPrivilege: necessário para ler/esvaziar as listas de memória (só como admin)."""
+    advapi, kernel = ctypes.WinDLL("advapi32", use_last_error=True), ctypes.windll.kernel32
+    kernel.GetCurrentProcess.restype = wintypes.HANDLE
+    advapi.OpenProcessToken.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)]
+    token = wintypes.HANDLE()
+    if not advapi.OpenProcessToken(kernel.GetCurrentProcess(), 0x28, ctypes.byref(token)):
+        return False
+    try:
+        tp = _TOKEN_PRIVILEGES(1, _LUID(), 2)
+        advapi.LookupPrivilegeValueW(None, "SeProfileSingleProcessPrivilege", ctypes.byref(tp.Luid))
+        advapi.AdjustTokenPrivileges(token, False, ctypes.byref(tp), 0, None, None)
+        return ctypes.get_last_error() != 1300
+    finally:
+        kernel.CloseHandle(token)
+
+
+def memory_info():
+    """RAM em MB: total, em uso, cache em espera (o que a limpeza esvazia) e realmente livre."""
+    st = _MEMORYSTATUSEX(ctypes.sizeof(_MEMORYSTATUSEX))
+    ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(st))
+    mb = 1024 * 1024
+    total, avail = st.ullTotalPhys // mb, st.ullAvailPhys // mb
+    info = {"total": total, "used": total - avail, "available": avail, "standby": None, "free": avail, "load": st.dwMemoryLoad}
+    lists = _SYSTEM_MEMORY_LIST_INFORMATION()
+    if _enable_profile_privilege() and ctypes.windll.ntdll.NtQuerySystemInformation(
+            80, ctypes.byref(lists), ctypes.sizeof(lists), None) == 0:
+        page = 4096
+        info["standby"] = sum(lists.PageCountByPriority) * page // mb
+        info["free"] = (lists.ZeroPageCount + lists.FreePageCount) * page // mb
+    return info
+
+
+def vpn_adapter():
+    """Nome da VPN ligada, se houver (ela distorce testes de velocidade e de ping)."""
+    rows = ps_json("Get-NetAdapter | Where-Object { $_.Status -eq 'Up' -and $_.InterfaceDescription -match "
+                   "'TAP|Wintun|WireGuard|OpenVPN|VPN|Tunnel|Proton|Nord|Surfshark|ExpressVPN|Cloudflare WARP' } | "
+                   "Select-Object -First 1 Name, InterfaceDescription")
+    return f"{rows[0]['Name']} ({rows[0]['InterfaceDescription']})" if rows else None
+
+
+def needs_ram_cleanup(info):
+    """'Precisa de limpeza': quase nada realmente livre, mas muito cache parado que dá para devolver."""
+    if info["standby"] is None:
+        return False
+    return info["free"] < max(1024, info["total"] * 0.10) and info["standby"] > 2048
+
+
 def purge_standby_list():
     """Esvazia a lista de memória em espera (mesma chamada do EmptyStandbyList). Precisa de admin."""
     advapi, kernel, ntdll = ctypes.WinDLL("advapi32", use_last_error=True), ctypes.windll.kernel32, ctypes.windll.ntdll

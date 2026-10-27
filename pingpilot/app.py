@@ -6,6 +6,7 @@ Uso:
   python app.py --no-elevate  abre sem pedir administrador
 """
 import collections
+import concurrent.futures
 import ctypes
 import faulthandler
 import ipaddress
@@ -27,14 +28,18 @@ import uuid
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import cleaner
 import core
 import drivers
 import i18n
+import limiter
+import multinet
 import tweaks
+import speedtest
 import upstream
 import winproc
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 FROZEN = getattr(sys, "frozen", False)  # rodando como PingPilot.exe (PyInstaller)
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 UI_DIR = os.path.join(getattr(sys, "_MEIPASS", APP_DIR), "ui")
@@ -91,12 +96,15 @@ SETTING_CHOICES = {
     "theme": ["dark", "light", "midnight", "pastel", "cyber", "glass", "material"],
     "dns_interval": [1800, 3600, 10800, 21600],
     "window_size": ["1280x720", "1360x840", "1440x810", "1600x900", "1920x1080"],
+    "ram_trigger": ["game", "status"],
+    "ram_interval": [3600, 21600, 43200, 86400],
 }
 SETTING_BOOLS = {"auto_dns", "tray", "notify_game", "notify_unstable", "verbose_logs", "notify_upstream",
-                 "notify_drivers", "notify_dns", "notify_session"}
+                 "notify_drivers", "notify_dns", "notify_session", "ram_auto", "notify_ram", "notify_multinet"}
 # tipo de alerta -> configuração que liga/desliga (Configurações > Notificações)
 ALERT_SETTINGS = {"game": "notify_game", "unstable": "notify_unstable", "upstream": "notify_upstream",
-                  "drivers": "notify_drivers", "dns": "notify_dns", "session": "notify_session"}
+                  "drivers": "notify_drivers", "dns": "notify_dns", "session": "notify_session", "ram": "notify_ram",
+                  "multinet": "notify_multinet"}
 DRIVER_CHECK_INTERVAL = 24 * 3600
 ALERT_COOLDOWN = 300  # um alerta de conexão instável por jogo a cada 5 min, no máximo
 TEST_DOMAINS = ["google.com", "steampowered.com", "riotgames.com", "epicgames.com", "discord.com"]
@@ -116,7 +124,9 @@ DEFAULT_CONFIG = {
     "settings": {"active": True, "monitor": True, "wifi": False, "auto_dns": False, "dns_interval": 3600,
                  "tray": True, "notify_game": False, "notify_unstable": True, "verbose_logs": False,
                  "notify_upstream": True, "notify_drivers": True, "notify_dns": True, "notify_session": False,
-                 "window_size": "1360x840", "lang": None, "theme": "dark"},
+                 "window_size": "1360x840", "lang": None, "theme": "dark",
+                 "ram_auto": False, "ram_trigger": "game", "ram_interval": 43200, "notify_ram": True, "notify_multinet": True},
+    "multinet": {"mode": "off", "primary": None, "backup": {}},
     "last_session": None,
 }
 
@@ -225,6 +235,8 @@ class Api:
     def __init__(self):
         self._admin = core.is_admin()
         self._config = {**DEFAULT_CONFIG, **load_json(CONFIG_FILE, {})}
+        mn = self._config.get("multinet", {})
+        self._config["multinet"] = {**DEFAULT_CONFIG["multinet"], **mn, "backup": dict(mn.get("backup", {}))}
         self._config["settings"] = {**DEFAULT_CONFIG["settings"], **self._config.get("settings", {})}
         self._logs = collections.deque(maxlen=300)
         self._jobs = {}
@@ -255,6 +267,8 @@ class Api:
             logger.setLevel(logging.DEBUG)
         threading.Thread(target=self._watcher, daemon=True).start()
         threading.Thread(target=self._startup_checks, name="verificacoes", daemon=True).start()
+        self._mn = {"fails": 0, "oks": 0, "failed_over": False, "probes": {}, "adapters": []}
+        threading.Thread(target=self._multinet_loop, name="multi-internet", daemon=True).start()
 
     # ---- infraestrutura
 
@@ -337,6 +351,7 @@ class Api:
             "profiles": self._profiles(), "last_session": self._config.get("last_session"),
             "session": self._session_view(), "wifi": self._wifi.last_result,
             "alerts_unread": sum(1 for a in self._config.get("alerts", []) if not a["read"]),
+            "ram_last": self._config.get("ram_last"),
         }
 
     def set_active(self, on):
@@ -603,7 +618,9 @@ class Api:
                                    if on else "Otimização desligada para este jogo.", page="connections", os_notify=True)
                 for pid in self._running_games.keys() - running.keys():
                     self._log(f"Jogo fechado: {self._profile(pid)['name']}")
+                started = running.keys() - self._running_games.keys()
                 self._running_games = running
+                self._ram_auto_tick(started)
                 self._update_connections()
                 self._check_alerts()
                 if logger.isEnabledFor(logging.DEBUG):
@@ -1047,13 +1064,10 @@ class Api:
                                 timeout=180)
             msg = f"Arquivos temporários removidos ({out.strip().splitlines()[-1] if out.strip() else 0} itens)"
         elif name == "ram":
-            self._need_admin()
-            before = core.standby_mb()
-            core.purge_standby_list()
-            after = core.standby_mb()
             code, out = 0, ""
-            msg = ("Memória em espera liberada" +
-                   (f": {before - after} MB" if before is not None and after is not None else ""))
+            r = self._ram_clean()
+            msg = f"{r['freed']} MB liberados · {r['free']} MB livres agora" if r["freed"] is not None \
+                else "Memória em espera liberada"
         elif name == "restore_point":
             self._need_admin()
             code, out = core.ps("Enable-ComputerRestore -Drive $Env:SystemDrive -EA SilentlyContinue;"
@@ -1072,6 +1086,217 @@ class Api:
         if name not in ("flush_dns", "renew_ip", "temp", "restore_point", "ram"):
             raise ValueError("ferramenta desconhecida")
         return self._job(lambda jid: self._tool(name))
+
+    # ---- limpeza de RAM
+
+    def _ram_clean(self, auto=False):
+        """Esvazia o cache em espera do Windows e mede quanto ficou livre (os apps abertos não são tocados)."""
+        self._need_admin()
+        before = core.memory_info()
+        core.purge_standby_list()
+        time.sleep(0.5)
+        after = core.memory_info()
+        freed = max(0, after["free"] - before["free"]) if before["standby"] is not None else None
+        last = {"time": time.time(), "freed": freed, "free": after["free"], "auto": auto}
+        self._config["ram_last"] = last
+        self._save()
+        self._log(f"Limpeza de RAM{' automática' if auto else ''}: {freed if freed is not None else '?'} MB liberados")
+        if auto:
+            self._add_alert("ram", "Limpeza automática concluída!",
+                            f"{freed} MB liberados · {after['free']} MB livres agora" if freed is not None
+                            else "Memória em espera liberada", page="boost")
+        return last
+
+    def ram_status(self):
+        info = core.memory_info()
+        s = self._config["settings"]
+        return {"memory": info, "needs": core.needs_ram_cleanup(info), "last": self._config.get("ram_last"),
+                "auto": s["ram_auto"], "trigger": s["ram_trigger"], "interval": s["ram_interval"], "admin": self._admin}
+
+    def ram_clean(self):
+        self._need_admin()
+        return self._job(lambda jid: self._ram_clean())
+
+    def _ram_auto_tick(self, started_games):
+        """Limpeza automática: quando um jogo começa, ou quando a RAM entra em 'Precisa de limpeza'
+        (no máximo uma vez a cada intervalo escolhido)."""
+        s = self._config["settings"]
+        if not (s["ram_auto"] and self._admin):
+            return
+        since = time.time() - (self._config.get("ram_last") or {}).get("time", 0)
+        if s["ram_trigger"] == "game":
+            go = bool(started_games) and since > 120
+        else:
+            go = since >= s["ram_interval"] and core.needs_ram_cleanup(core.memory_info())
+        if go:
+            threading.Thread(target=self._ram_clean, kwargs={"auto": True}, name="limpeza-ram", daemon=True).start()
+
+    # ---- limpador de arquivos
+
+    def cleaner_scan(self):
+        def work(jid):
+            self._jobs[jid]["progress"] = "Analisando…"
+            return {"items": cleaner.scan(self._admin), "last": self._config.get("clean_last")}
+        return self._job(work)
+
+    def cleaner_clean(self, ids):
+        valid = {x["id"] for x in cleaner.CATALOG}
+        if not isinstance(ids, list) or not ids or not set(ids) <= valid:
+            raise ValueError("itens inválidos")
+
+        def work(jid):
+            self._jobs[jid]["progress"] = "Limpando…"
+            r = cleaner.clean(set(ids), self._admin)
+            self._config["clean_last"] = {"time": r["time"], "freed": r["freed"]}
+            self._save()
+            self._log(f"Limpador: {r['freed'] // 1048576} MB liberados em {r['files']} arquivos ({', '.join(sorted(ids))})"
+                      + (f"; pulados: {', '.join(x['id'] for x in r['skipped'])}" if r["skipped"] else ""))
+            return r
+        return self._job(work)
+
+    # ---- multi internet
+
+    def multinet_status(self):
+        with concurrent.futures.ThreadPoolExecutor(2) as pool:
+            f_items, f_off = pool.submit(multinet.adapters), pool.submit(multinet.offline)
+            items, offline = f_items.result(), f_off.result()
+        probes = multinet.probe_all(items)
+        cfg = self._config["multinet"]
+        return {"adapters": [a | {"probe": probes.get(a["index"])} for a in items], "offline": offline,
+                "mode": cfg["mode"], "primary": cfg["primary"], "failed_over": self._mn["failed_over"],
+                "admin": self._admin}
+
+    def multinet_set(self, mode, primary=None):
+        """mode: off (Windows decide), priority (a principal sempre na frente) ou failover (priority + troca
+        automática para a reserva quando a principal para de responder)."""
+        if mode not in ("off", "priority", "failover"):
+            raise ValueError("modo inválido")
+        self._need_admin()
+        cfg = self._config["multinet"]
+        items = multinet.adapters()
+        if mode == "off":
+            multinet.restore(cfg["backup"])
+            cfg.update(mode="off", backup={})
+            self._mn.update(failed_over=False, fails=0, oks=0)
+            self._save()
+            self._log("Multi Internet desligado: prioridades do Windows restauradas")
+            return True
+        by_alias = {a["alias"]: a for a in items}
+        if primary not in by_alias:
+            raise ValueError("escolha uma conexão da lista")
+        if len(items) < 2 and mode == "failover":
+            raise RuntimeError("É preciso ter duas conexões com internet ligadas ao mesmo tempo.")
+        for a in items:  # guarda o valor original só da primeira vez que o PingPilot mexe em cada adaptador
+            cfg["backup"].setdefault(str(a["index"]), {"metric": a["metric"], "auto": a["auto"]})
+        order = [by_alias[primary]["index"]] + [a["index"] for a in items if a["alias"] != primary]
+        multinet.set_order(order)
+        cfg.update(mode=mode, primary=primary)
+        self._mn.update(failed_over=False, fails=0, oks=0)
+        self._save()
+        self._log(f"Multi Internet: {mode}, principal {primary}")
+        return True
+
+    def _multinet_loop(self):
+        """Failover: a cada 5 s testa a principal saindo por ela mesma; 3 falhas seguidas passam a reserva
+        para a frente, e 30 s estáveis devolvem a principal."""
+        while not self._stop.wait(5):
+            try:
+                cfg = self._config["multinet"]
+                if cfg["mode"] != "failover" or not self._admin:
+                    continue
+                st = self._mn
+                # a lista de adaptadores (PowerShell, pesado) só é relida a cada 60 s ou quando algo falha;
+                # o teste em si é só um connect TCP saindo pelo IP da principal
+                if not st["adapters"] or time.time() - st.get("adapters_ts", 0) > 60 or st["fails"]:
+                    st["adapters"], st["adapters_ts"] = multinet.adapters(), time.time()
+                items = st["adapters"]
+                main = next((a for a in items if a["alias"] == cfg["primary"]), None)
+                others = [a for a in items if a["alias"] != cfg["primary"]]
+                ok = bool(main) and multinet.probe(main["ip"])["ok"]
+                st["fails"], st["oks"] = (0, st["oks"] + 1) if ok else (st["fails"] + 1, 0)
+                if not st["failed_over"] and st["fails"] >= multinet.FAIL_CHECKS and others:
+                    probes = multinet.probe_all(others)
+                    alive = sorted((a for a in others if probes[a["index"]]["ok"]), key=lambda a: probes[a["index"]]["ping"])
+                    if alive:
+                        multinet.set_order([alive[0]["index"]] + [a["index"] for a in items if a is not alive[0]])
+                        st["failed_over"] = True
+                        self._log(f"Multi Internet: {cfg['primary']} sem resposta, usando {alive[0]['alias']}")
+                        self._add_alert("multinet", f"{cfg['primary']} caiu: usando {alive[0]['alias']}",
+                                        "A conexão principal parou de responder. O PingPilot passou o tráfego novo "
+                                        "para a reserva; partidas em andamento podem reconectar.",
+                                        page="multinet", os_notify=True)
+                elif st["failed_over"] and main and st["oks"] >= multinet.RECOVER_CHECKS:
+                    multinet.set_order([main["index"]] + [a["index"] for a in others])
+                    st["failed_over"] = False
+                    self._log(f"Multi Internet: {cfg['primary']} voltou e é a principal de novo")
+                    self._add_alert("multinet", f"{cfg['primary']} voltou",
+                                    "A conexão principal está estável de novo e voltou a ser usada.", page="multinet")
+            except Exception:
+                logger.exception("Erro no Multi Internet (o laço continua)")
+
+    def _multinet_shutdown(self):
+        """Ao sair no meio de um failover, devolve a principal para a frente (senão ela ficaria rebaixada)."""
+        cfg = self._config["multinet"]
+        if self._mn["failed_over"] and cfg["mode"] in ("priority", "failover"):
+            items = multinet.adapters()
+            main = [a["index"] for a in items if a["alias"] == cfg["primary"]]
+            if main:
+                multinet.set_order(main + [a["index"] for a in items if a["alias"] != cfg["primary"]])
+
+    # ---- teste de velocidade
+
+    def speed_servers(self):
+        cache = getattr(self, "_speed_list", None)
+        if not cache or time.time() - cache[0] > 3600:
+            self._speed_list = (time.time(), speedtest.servers())
+        return [{"id": x["id"], "name": x["name"]} for x in self._speed_list[1]]
+
+    def speed_history(self):
+        return {"history": self._config.get("speed_history", []), "server": self._config.get("speed_server", "mlab"),
+                "in_game": bool(self._session), "vpn": core.vpn_adapter()}
+
+    def speed_test(self, server="auto", force=False):
+        """server: "mlab" (M-Lab/NDT7, o do Google), "auto" (LibreSpeed de menor ping), id da lista pública do
+        LibreSpeed ou URL https de um servidor LibreSpeed próprio."""
+        if self._session and not force:
+            raise RuntimeError("Uma partida está em andamento — o teste ocuparia toda a conexão e causaria lag.")
+        server = str(server).strip()[:300]
+        if server.startswith("https://"):
+            chosen = speedtest.custom_server(server)
+        elif server not in ("auto", "mlab") and not server.isdigit():
+            raise ValueError("servidor inválido")
+
+        def work(jid):
+            nonlocal chosen
+            self._jobs[jid]["progress"] = {"phase": "server", "mbps": 0, "elapsed": 0, "seconds": 1}
+            fallbacks = []
+            if server == "mlab":
+                chosen, *fallbacks = speedtest.mlab_locate(VERSION)
+                chosen["ping"] = speedtest.server_ping(chosen)
+            elif server == "auto":
+                chosen = speedtest.pick_server(self._speed_list[1] if getattr(self, "_speed_list", None)
+                                               else speedtest.servers())
+            elif server.isdigit():
+                self.speed_servers()
+                match = [x for x in self._speed_list[1] if x["id"] == int(server)]
+                if not match:
+                    raise ValueError("servidor não está mais na lista")
+                chosen = dict(match[0], ping=speedtest.server_ping(match[0]))
+            else:
+                chosen["ping"] = speedtest.server_ping(chosen)
+            result = speedtest.run(chosen, lambda p: self._jobs[jid].__setitem__("progress", p | {"server": chosen["name"]}),
+                                   fallbacks)
+            history = self._config.setdefault("speed_history", [])
+            history.insert(0, result)
+            del history[30:]
+            self._config["speed_server"] = server
+            self._save()
+            self._log(f"Teste de velocidade: {result['download']} Mbps ↓ / {result['upload']} Mbps ↑, "
+                      f"ping {result['ping']} ms, bufferbloat {result['grade']} ({chosen['name']})")
+            return result
+
+        chosen = None if not server.startswith("https://") else chosen
+        return self._job(work)
 
     # ---- drivers
 
@@ -1155,7 +1380,33 @@ class Api:
 
     def restore_all(self):
         self._need_admin()
-        return self._job(lambda jid: self._engine.restore_all())
+        def work(jid):
+            result = self._engine.restore_all()
+            limiter.remove_all()  # os limites de upload também são ajustes do PC Boost
+            return result
+        return self._job(work)
+
+    # ---- limitador de tráfego (upload por programa)
+
+    def limiter_list(self):
+        running = winproc.pids_by_name()
+        limits = limiter.list_limits()
+        have = {x["exe"].casefold() for x in limits}
+        sugg = [e for e in limiter.SUGGESTIONS if e.casefold() not in have]
+        return {"limits": limits, "admin": self._admin,
+                "suggestions": [{"exe": e, "running": e.casefold() in running} for e in sugg]}
+
+    def limiter_set(self, exe, mbps):
+        self._need_admin()
+        exe = limiter.set_limit(exe, mbps)
+        self._log(f"Limitador: upload de {exe} limitado a {mbps} Mbps")
+        return exe
+
+    def limiter_remove(self, exe):
+        self._need_admin()
+        exe = limiter.remove_limit(exe)
+        self._log(f"Limitador: limite de {exe} removido")
+        return exe
 
     # ---- Wi-Fi
 
@@ -1349,6 +1600,10 @@ def main():
     webview.start(private_mode=False, storage_path=os.path.join(DATA_DIR, ".webview"))
     tray.stop()
     api._stop.set()
+    try:
+        api._multinet_shutdown()
+    except Exception:
+        logger.exception("Multi Internet: falha ao restaurar a principal ao sair")
     os._exit(0)  # encerra também as threads de ping e monitoramento
 
 

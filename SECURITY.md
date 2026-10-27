@@ -21,8 +21,14 @@ Include the version (Settings → About), what you did, and the exported logs if
   through `ps_quote()` or are integers / validated constants.
 - **Dev server (`--browser`)** listens on `127.0.0.1` only, rejects foreign `Host` headers (DNS rebinding) and
   requires a per-run token on every API call (so a website open in your browser cannot drive it).
-- **Network access** is limited to: ping/DNS/TCP probes you start, Windows Update (drivers), and HTTPS calls to
-  `api.github.com` / `raw.githubusercontent.com` to check the source projects.
+- **Network access** is limited to: ping/DNS/TCP probes you start, Windows Update (drivers), HTTPS calls to
+  `api.github.com` / `raw.githubusercontent.com` to check the source projects, the speed test (only when
+  you click "Start test": M-Lab's locator at `locate.measurementlab.net` and the M-Lab server it returns, or the
+  public LibreSpeed server list at `librespeed.org` and the server you pick). M-Lab publishes test results, including
+  the IP address, as open data; the app says so next to the server choice, and
+  Multi Internet's TCP probes to 1.1.1.1 / 8.8.8.8 / 9.9.9.9 on port 443 (no data is sent).
+- **Cleaner** only deletes inside a fixed list of cache folders; it never follows symbolic links or junctions,
+  never touches its own files, and browser cleanup is limited to cache folders (no cookies, history or passwords).
 - **Everything reversible.** Every registry change is backed up before it is made.
 
 ## The security battery

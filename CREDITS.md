@@ -10,6 +10,10 @@ shows where the idea came from (blue tag), and `pingpilot/tweaks.py` lists the s
 | [WinUtil](https://github.com/ChrisTitusTech/winutil) | Chris Titus Tech | MIT | Game Mode, mouse acceleration, background apps, Delivery Optimization, prefer IPv4, Teredo, activity history, promoted apps, temp-file cleanup, restore point |
 | [KOALA Gaming Optimizer](https://github.com/koalaaufpillen/koalaoptimizer) | koalaaufpillen | MIT (declared in its README) | Game DVR, MMCSS for games, SystemResponsiveness, Win32PrioritySeparation, High performance power plan, hardware GPU scheduling, Nagle (TcpAckFrequency / TCPNoDelay), NetworkThrottlingIndex |
 | [WLANOptimizer](https://github.com/catid/WLANOptimizer) | Christopher A. Taylor | BSD-3-Clause | The technique of turning off Wi-Fi background scanning and turning on streaming mode (`WlanSetInterface`), rewritten with `ctypes` |
+| [Measurement Lab (M-Lab)](https://www.measurementlab.net/) | M-Lab consortium | Apache-2.0 (ndt7 protocol and servers) | The speed test's default server: the NDT7 protocol and M-Lab's public servers (the same platform behind Google's speed test); the client was written from the protocol spec |
+| [websocket-client](https://github.com/websocket-client/websocket-client) | websocket-client contributors | Apache-2.0 | WebSocket library used by the NDT7 speed test (bundled in the .exe) |
+| [LibreSpeed](https://github.com/librespeed/speedtest) | Federico Dossena and contributors | LGPL-3.0 | The speed test uses the project's public servers and its HTTP protocol (`garbage.php` / `empty.php`); no LibreSpeed code is shipped |
+| [BleachBit](https://github.com/bleachbit/bleachbit) | Andrew Ziem and contributors | GPL-3.0 | Inspiration for the Cleaner's approach (cache-only cleaners, preview before delete, never follow links); no BleachBit code or cleaner definitions are used |
 | HoneCTRL 2.7 | Auraside (Hone) | GNU AGPLv3 (as declared in that version) | The *ideas* behind network-card power saving, DNS failure cache, game QoS (DSCP 46) and standby-memory cleanup |
 
 ## Tweaks left out on purpose
